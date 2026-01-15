@@ -47,3 +47,8 @@ output/
 *.dll
 *.so
 *.dylib
+
+# Documentation (exclude all docs and markdown)
+docs/
+*.md
+!README.md
