@@ -1,0 +1,58 @@
+
+.dashboard-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-subtle);
+  font-size: var(--font-size-sm);
+}
+
+.footer-info-group {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xl);
+}
+
+.footer-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+.scan-stub-btn {
+  background: var(--accent-primary);
+  color: #181f25;
+  font-family: Orbitron, sans-serif;
+  font-weight: 700;
+  font-size: 1rem;
+  border: none;
+  border-radius: 8px;
+  padding: 0.5em 1.6em;
+  box-shadow: 0 2px 12px 0 rgba(0,255,128,0.10);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+  outline: none;
+}
+.scan-stub-btn:hover, .scan-stub-btn:focus {
+  background: #00ff80;
+  color: #181f25;
+  box-shadow: 0 4px 18px 0 rgba(0,255,128,0.18);
+}
+
+.footer-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  color: var(--text-secondary);
+}
+
+.footer-item svg {
+  color: var(--accent-primary);
+  flex-shrink: 0;
+}
+
+.footer-item span {
+  font-family: 'Courier New', monospace;
+  color: var(--text-primary);
+}

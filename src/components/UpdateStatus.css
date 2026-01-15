@@ -1,0 +1,192 @@
+/* Footer version - compact */
+.update-status-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 16px;
+}
+
+.update-status-footer > div {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.update-pending-footer {
+  color: #ffa500;
+  background: rgba(255, 165, 0, 0.1);
+}
+
+.update-error-footer {
+  color: #ff4444;
+  background: rgba(255, 68, 68, 0.1);
+}
+
+.update-uptodate-footer {
+  color: #44ff44;
+  background: rgba(68, 255, 68, 0.1);
+}
+
+.update-installing-footer {
+  color: #4488ff;
+  background: rgba(68, 136, 255, 0.1);
+}
+
+.check-update-button-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5em;
+  padding: 0.5em 1.6em;
+  background: var(--accent-primary);
+  color: #181f25;
+  font-family: Orbitron, sans-serif;
+  font-weight: 700;
+  font-size: 1rem;
+  border: none;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px 0 rgba(0,255,128,0.10);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+  outline: none;
+}
+
+.check-update-button-footer:hover:not(:disabled) {
+  background: #00ff80;
+  color: #181f25;
+  box-shadow: 0 4px 18px 0 rgba(0,255,128,0.18);
+}
+
+.check-update-button-footer:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Original container version - keep for potential future use */
+.update-status-container {
+  background: var(--card-bg, #1a1a1a);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 16px 0;
+  border: 1px solid var(--border-color, #333);
+}
+
+.update-status-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.update-status-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.version-info {
+  font-size: 12px;
+  color: var(--text-secondary, #888);
+}
+
+.update-status-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.update-pending,
+.update-error,
+.update-uptodate,
+.update-installing {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 6px;
+  background: var(--bg-secondary, #222);
+}
+
+.update-pending {
+  border-left: 3px solid #ffa500;
+}
+
+.update-error {
+  border-left: 3px solid #ff4444;
+}
+
+.update-uptodate {
+  border-left: 3px solid #44ff44;
+}
+
+.update-installing {
+  border-left: 3px solid #4488ff;
+}
+
+.update-message {
+  font-size: 12px;
+  color: var(--text-secondary, #888);
+  margin-top: 4px;
+}
+
+.changelog {
+  margin-top: 8px;
+  font-size: 11px;
+}
+
+.changelog summary {
+  cursor: pointer;
+  color: var(--text-secondary, #888);
+  margin-bottom: 4px;
+}
+
+.changelog pre {
+  margin: 8px 0 0 0;
+  padding: 8px;
+  background: var(--bg-primary, #1a1a1a);
+  border-radius: 4px;
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.check-update-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--primary-color, #4488ff);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+
+.check-update-button:hover:not(:disabled) {
+  background: var(--primary-hover, #5599ff);
+}
+
+.check-update-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

@@ -1,0 +1,37 @@
+[package]
+name = "stub"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = []
+asm = []
+
+[profile.release]
+opt-level = "z"  # Optimize for size
+lto = true       # Link-time optimization
+
+[dependencies]
+winapi = { version = "0.3", features = [
+    "winuser",
+    "processthreadsapi",
+    "winnt",
+    "memoryapi",
+    "libloaderapi",
+    "errhandlingapi",
+    "sysinfoapi",
+    "winreg",
+    "basetsd",
+    "tlhelp32",
+    "minwindef",
+    "ntdef",
+    "dbghelp",
+    "winbase",
+    "processenv",
+    "psapi",
+    "securitybaseapi",
+    "sddl",
+]}
+
+[target.'cfg(target_arch = "x86_64")'.dependencies]
+cc = "1.0"
