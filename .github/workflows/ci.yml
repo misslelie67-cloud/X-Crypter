@@ -33,13 +33,17 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
       
-      - name: Check formatting
-        run: cargo fmt --all -- --check
-        working-directory: src-tauri
+      - name: Check formatting (Tauri)
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
       
-      - name: Run clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings
-        working-directory: src-tauri
+      - name: Check formatting (Stub)
+        run: cargo fmt --manifest-path stub/Cargo.toml -- --check
+      
+      - name: Run clippy (Tauri)
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
+      
+      - name: Run clippy (Stub)
+        run: cargo clippy --manifest-path stub/Cargo.toml --all-targets --all-features -- -D warnings
 
   # Test Rust code (Windows only)
   test:
