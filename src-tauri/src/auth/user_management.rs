@@ -24,7 +24,9 @@ pub async fn create_user_account(
 
     // Store user with encrypted chat_id as key
     let user_key = format!("user:{}", encrypt_data(&chat_id)?);
-    upstash.set_json(&user_key, &user, (days * 86400) as u64).await?;
+    upstash
+        .set_json(&user_key, &user, (days * 86400) as u64)
+        .await?;
 
     Ok(format!(
         "✅ Account created for chat_id: {}\n📅 Expires: {} days from now\n🔐 Data encrypted",

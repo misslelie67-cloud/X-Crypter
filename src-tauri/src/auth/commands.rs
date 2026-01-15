@@ -24,10 +24,10 @@ pub async fn generate_qr_code(upstash: State<'_, UpstashClient>) -> Result<QRRes
     upstash.set_json(&key, &session, QR_TTL_SECS).await?;
 
     // Generate QR code with Telegram deep link
-    let bot_username = std::env::var("TELEGRAM_BOT_USERNAME")
-        .map_err(|_| "TELEGRAM_BOT_USERNAME not set")?;
+    let bot_username =
+        std::env::var("TELEGRAM_BOT_USERNAME").map_err(|_| "TELEGRAM_BOT_USERNAME not set")?;
     let deep_link = format!("https://t.me/{}?start={}", bot_username, token);
-    
+
     // Generate QR code SVG
     let qr_code = generate_qr_svg(&deep_link)?;
 
@@ -78,7 +78,7 @@ pub async fn exchange_token(
     match session {
         Some(session) if session.status == AuthStatus::Approved => {
             let chat_id = session.chat_id.ok_or("No chat_id in session")?;
-            
+
             // Create user session
             let session_id = Uuid::new_v4().simple().to_string();
             let now = chrono::Utc::now().timestamp();
@@ -92,7 +92,9 @@ pub async fn exchange_token(
                 "expires_at": expires_at,
             });
 
-            upstash.set_json(&session_key, &user_session, 30 * 86400).await?;
+            upstash
+                .set_json(&session_key, &user_session, 30 * 86400)
+                .await?;
 
             // Delete QR session
             upstash.delete(&key).await?;
@@ -117,9 +119,7 @@ pub async fn validate_session(
 
     match session {
         Some(session) => {
-            let expires_at = session["expires_at"]
-                .as_i64()
-                .ok_or("Invalid expires_at")?;
+            let expires_at = session["expires_at"].as_i64().ok_or("Invalid expires_at")?;
             let chat_id = session["chat_id"]
                 .as_str()
                 .ok_or("Invalid chat_id")?
@@ -146,13 +146,10 @@ pub async fn validate_session(
 }
 
 fn generate_qr_svg(data: &str) -> Result<String, String> {
-    use qrcode::{QrCode, render::svg};
-    
+    use qrcode::{render::svg, QrCode};
+
     let code = QrCode::new(data.as_bytes()).map_err(|e| e.to_string())?;
-    let svg = code
-        .render::<svg::Color>()
-        .min_dimensions(280, 280)
-        .build();
-    
+    let svg = code.render::<svg::Color>().min_dimensions(280, 280).build();
+
     Ok(svg)
 }

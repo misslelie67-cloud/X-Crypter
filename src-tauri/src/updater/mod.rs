@@ -1,15 +1,15 @@
 // Update System Module
 // Handles remote updates with witness-based approval
 
-pub mod witness;
-pub mod download;
-pub mod version;
-pub mod telegram;
 pub mod commands;
+pub mod download;
 pub mod install;
+pub mod telegram;
+pub mod version;
+pub mod witness;
 
-pub use witness::*;
 pub use version::*;
+pub use witness::*;
 
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -18,12 +18,12 @@ use std::path::PathBuf;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateInfo {
     pub version: String,
-    pub file_hash: String,  // SHA256 of update file
-    pub file_url: String,   // URL to download update
-    pub timestamp: i64,     // Unix timestamp
-    pub witness: String,    // HMAC-SHA256 witness
+    pub file_hash: String, // SHA256 of update file
+    pub file_url: String,  // URL to download update
+    pub timestamp: i64,    // Unix timestamp
+    pub witness: String,   // HMAC-SHA256 witness
     pub changelog: Option<String>,
-    pub size: u64,          // File size in bytes
+    pub size: u64, // File size in bytes
 }
 
 /// Update status
@@ -46,10 +46,10 @@ pub enum UpdateStatus {
 /// Update configuration
 #[derive(Debug, Clone)]
 pub struct UpdateConfig {
-    pub update_server_url: Option<String>,  // Optional: only needed if not using Upstash
+    pub update_server_url: Option<String>, // Optional: only needed if not using Upstash
     pub telegram_chat_id: Option<i64>,
-    pub check_interval_seconds: u64,  // Update check interval in seconds
-    pub witness_secret: String,  // Shared secret for witness generation
+    pub check_interval_seconds: u64, // Update check interval in seconds
+    pub witness_secret: String,      // Shared secret for witness generation
 }
 
 impl UpdateConfig {

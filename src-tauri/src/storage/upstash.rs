@@ -66,9 +66,7 @@ impl UpstashClient {
             return Ok(None);
         }
 
-        let data_str = result["result"]
-            .as_str()
-            .ok_or("Invalid response format")?;
+        let data_str = result["result"].as_str().ok_or("Invalid response format")?;
         let data: T = serde_json::from_str(data_str).map_err(|e| e.to_string())?;
 
         Ok(Some(data))
@@ -88,10 +86,7 @@ impl UpstashClient {
     /// Store update metadata (no TTL, persistent)
     /// This is used by update upload scripts to store metadata in Upstash Redis
     #[allow(dead_code)]
-    pub async fn set_update_metadata<T: Serialize>(
-        &self,
-        value: &T,
-    ) -> Result<(), String> {
+    pub async fn set_update_metadata<T: Serialize>(&self, value: &T) -> Result<(), String> {
         let json = serde_json::to_string(value).map_err(|e| e.to_string())?;
 
         let response = self
@@ -106,7 +101,10 @@ impl UpstashClient {
         if response.status().is_success() {
             Ok(())
         } else {
-            Err(format!("Failed to set update metadata: {}", response.status()))
+            Err(format!(
+                "Failed to set update metadata: {}",
+                response.status()
+            ))
         }
     }
 

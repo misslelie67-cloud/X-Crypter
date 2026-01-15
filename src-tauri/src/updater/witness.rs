@@ -3,24 +3,19 @@
 
 use crate::updater::UpdateInfo;
 use hmac::{Hmac, Mac};
-use sha2::Sha256;
 use serde::{Deserialize, Serialize};
+use sha2::Sha256;
 
 type HmacSha256 = Hmac<Sha256>;
 
 /// Generate witness for update info
-pub fn generate_witness(
-    version: &str,
-    file_hash: &str,
-    timestamp: i64,
-    secret: &str,
-) -> String {
-    let mut mac = HmacSha256::new_from_slice(secret.as_bytes())
-        .expect("HMAC can take key of any size");
-    
+pub fn generate_witness(version: &str, file_hash: &str, timestamp: i64, secret: &str) -> String {
+    let mut mac =
+        HmacSha256::new_from_slice(secret.as_bytes()).expect("HMAC can take key of any size");
+
     let message = format!("{}:{}:{}", version, file_hash, timestamp);
     mac.update(message.as_bytes());
-    
+
     let result = mac.finalize();
     hex::encode(result.into_bytes())
 }
@@ -33,7 +28,7 @@ pub fn verify_witness(update_info: &UpdateInfo, secret: &str) -> bool {
         update_info.timestamp,
         secret,
     );
-    
+
     expected_witness == update_info.witness
 }
 
@@ -57,7 +52,7 @@ impl WitnessRequest {
             changelog: update_info.changelog.clone(),
         }
     }
-    
+
     /// Format message for Telegram
     pub fn to_telegram_message(&self) -> String {
         let mut msg = format!(
@@ -66,14 +61,14 @@ impl WitnessRequest {
             Hash: `{}`\n\
             Witness: `{}`\n",
             self.version,
-            &self.file_hash[..16],  // First 16 chars
+            &self.file_hash[..16], // First 16 chars
             &self.witness[..16]
         );
-        
+
         if let Some(changelog) = &self.changelog {
             msg.push_str(&format!("\n*Changelog:*\n{}", changelog));
         }
-        
+
         msg.push_str("\n\nUse `/approve {}` to approve or `/reject {}` to reject");
         msg
     }
@@ -82,5 +77,5 @@ impl WitnessRequest {
 /// Check if witness is expired (older than 1 hour)
 pub fn is_witness_expired(timestamp: i64) -> bool {
     let now = chrono::Utc::now().timestamp();
-    (now - timestamp) > 3600  // 1 hour
+    (now - timestamp) > 3600 // 1 hour
 }

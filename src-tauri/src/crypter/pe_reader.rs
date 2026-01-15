@@ -54,39 +54,41 @@ pub struct SectionHeader {
 /// Read and parse PE file
 pub fn read_pe_file(file_path: &str) -> Result<PEFile, String> {
     // Read entire file
-    let raw_data = fs::read(file_path)
-        .map_err(|e| format!("Failed to read file: {}", e))?;
-    
+    let raw_data = fs::read(file_path).map_err(|e| format!("Failed to read file: {}", e))?;
+
     if raw_data.len() < 64 {
         return Err("File too small to be a valid PE".to_string());
     }
-    
+
     // Parse DOS header
     let dos_header = parse_dos_header(&raw_data)?;
-    
+
     // Check MZ signature
     if dos_header.signature != [0x4D, 0x5A] {
         return Err("Invalid DOS signature (not MZ)".to_string());
     }
-    
+
     // Get PE header offset
     let pe_offset = dos_header.e_lfanew as usize;
     if pe_offset >= raw_data.len() {
         return Err("PE header offset out of bounds".to_string());
     }
-    
+
     // Parse PE header
     let pe_header = parse_pe_header(&raw_data[pe_offset..])?;
-    
+
     // Check PE signature
     if pe_header.signature != [0x50, 0x45, 0x00, 0x00] {
         return Err("Invalid PE signature".to_string());
     }
-    
+
     // Parse section headers
     let sections_offset = pe_offset + 24 + pe_header.size_of_optional_header as usize;
-    let sections = parse_sections(&raw_data[sections_offset..], pe_header.number_of_sections as usize)?;
-    
+    let sections = parse_sections(
+        &raw_data[sections_offset..],
+        pe_header.number_of_sections as usize,
+    )?;
+
     Ok(PEFile {
         dos_header,
         pe_header,
@@ -100,10 +102,10 @@ fn parse_dos_header(data: &[u8]) -> Result<DOSHeader, String> {
     if data.len() < 64 {
         return Err("Data too short for DOS header".to_string());
     }
-    
+
     let signature = [data[0], data[1]];
     let e_lfanew = u32::from_le_bytes([data[60], data[61], data[62], data[63]]);
-    
+
     Ok(DOSHeader {
         signature,
         e_lfanew,
@@ -115,7 +117,7 @@ fn parse_pe_header(data: &[u8]) -> Result<PEHeader, String> {
     if data.len() < 24 {
         return Err("Data too short for PE header".to_string());
     }
-    
+
     let signature = [data[0], data[1], data[2], data[3]];
     let machine = u16::from_le_bytes([data[4], data[5]]);
     let number_of_sections = u16::from_le_bytes([data[6], data[7]]);
@@ -124,7 +126,7 @@ fn parse_pe_header(data: &[u8]) -> Result<PEHeader, String> {
     let number_of_symbols = u32::from_le_bytes([data[16], data[17], data[18], data[19]]);
     let size_of_optional_header = u16::from_le_bytes([data[20], data[21]]);
     let characteristics = u16::from_le_bytes([data[22], data[23]]);
-    
+
     Ok(PEHeader {
         signature,
         machine,
@@ -141,34 +143,49 @@ fn parse_pe_header(data: &[u8]) -> Result<PEHeader, String> {
 fn parse_sections(data: &[u8], count: usize) -> Result<Vec<SectionHeader>, String> {
     let mut sections = Vec::new();
     let section_size = 40; // Each section header is 40 bytes
-    
+
     if data.len() < count * section_size {
         return Err("Data too short for section headers".to_string());
     }
-    
+
     for i in 0..count {
         let offset = i * section_size;
         let section_data = &data[offset..offset + section_size];
-        
+
         let mut name = [0u8; 8];
         name.copy_from_slice(&section_data[0..8]);
-        
+
         let virtual_size = u32::from_le_bytes([
-            section_data[8], section_data[9], section_data[10], section_data[11]
+            section_data[8],
+            section_data[9],
+            section_data[10],
+            section_data[11],
         ]);
         let virtual_address = u32::from_le_bytes([
-            section_data[12], section_data[13], section_data[14], section_data[15]
+            section_data[12],
+            section_data[13],
+            section_data[14],
+            section_data[15],
         ]);
         let size_of_raw_data = u32::from_le_bytes([
-            section_data[16], section_data[17], section_data[18], section_data[19]
+            section_data[16],
+            section_data[17],
+            section_data[18],
+            section_data[19],
         ]);
         let pointer_to_raw_data = u32::from_le_bytes([
-            section_data[20], section_data[21], section_data[22], section_data[23]
+            section_data[20],
+            section_data[21],
+            section_data[22],
+            section_data[23],
         ]);
         let characteristics = u32::from_le_bytes([
-            section_data[36], section_data[37], section_data[38], section_data[39]
+            section_data[36],
+            section_data[37],
+            section_data[38],
+            section_data[39],
         ]);
-        
+
         sections.push(SectionHeader {
             name,
             virtual_size,
@@ -178,7 +195,7 @@ fn parse_sections(data: &[u8], count: usize) -> Result<Vec<SectionHeader>, Strin
             characteristics,
         });
     }
-    
+
     Ok(sections)
 }
 
@@ -217,7 +234,7 @@ mod tests {
         data[61] = 0x00;
         data[62] = 0x00;
         data[63] = 0x00;
-        
+
         let dos_header = parse_dos_header(&data).unwrap();
         assert_eq!(dos_header.signature, [0x4D, 0x5A]);
         assert_eq!(dos_header.e_lfanew, 128);

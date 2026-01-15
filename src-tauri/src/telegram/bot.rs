@@ -86,32 +86,36 @@ impl TelegramBot {
                                 if text.starts_with("/start ") {
                                     let token = text.trim_start_matches("/start ").trim();
                                     let chat_id = message.chat.id.to_string();
-                                    
-                                    println!("📱 Received /start command from chat_id: {}", chat_id);
-                                    
-                                    if let Err(e) = self.handle_start_command(token, &chat_id).await {
+
+                                    println!(
+                                        "📱 Received /start command from chat_id: {}",
+                                        chat_id
+                                    );
+
+                                    if let Err(e) = self.handle_start_command(token, &chat_id).await
+                                    {
                                         eprintln!("❌ Error handling /start: {}", e);
                                     }
                                 }
                             }
                         }
-                        
+
                         // Handle callback queries (button clicks)
                         if let Some(callback) = update.callback_query {
                             let chat_id = callback.from.id.to_string();
-                            
+
                             if let Some(data) = callback.data {
                                 println!("🔘 Received callback from chat_id: {}", chat_id);
-                                
+
                                 // Answer callback query immediately
                                 let _ = self.answer_callback(&callback.id, "").await;
-                                
+
                                 if let Err(e) = self.handle_callback(&data, &chat_id).await {
                                     eprintln!("❌ Error handling callback: {}", e);
                                 }
                             }
                         }
-                        
+
                         offset = update.update_id + 1;
                     }
                 }
@@ -125,7 +129,10 @@ impl TelegramBot {
     }
 
     async fn delete_webhook(&self) -> Result<(), String> {
-        let url = format!("https://api.telegram.org/bot{}/deleteWebhook", self.bot_token);
+        let url = format!(
+            "https://api.telegram.org/bot{}/deleteWebhook",
+            self.bot_token
+        );
 
         let response = self
             .client
@@ -176,7 +183,8 @@ impl TelegramBot {
         let mut session = match session {
             Some(s) => s,
             None => {
-                self.send_message(chat_id, "❌ QR code expired or invalid.").await?;
+                self.send_message(chat_id, "❌ QR code expired or invalid.")
+                    .await?;
                 return Ok(());
             }
         };
@@ -184,7 +192,8 @@ impl TelegramBot {
         // Check if session is still valid
         let now = chrono::Utc::now().timestamp();
         if now > session.expires_at {
-            self.send_message(chat_id, "❌ QR code has expired.").await?;
+            self.send_message(chat_id, "❌ QR code has expired.")
+                .await?;
             return Ok(());
         }
 
@@ -207,7 +216,8 @@ impl TelegramBot {
         // Decrypt and verify chat_id matches
         let decrypted_chat_id = decrypt_data(&user.chat_id)?;
         if decrypted_chat_id != chat_id {
-            self.send_message(chat_id, "❌ Account verification failed.").await?;
+            self.send_message(chat_id, "❌ Account verification failed.")
+                .await?;
             return Ok(());
         }
 
@@ -216,7 +226,8 @@ impl TelegramBot {
             self.send_message(
                 chat_id,
                 "❌ Your account has expired.\nPlease contact admin to renew.",
-            ).await?;
+            )
+            .await?;
             return Ok(());
         }
 
@@ -239,13 +250,18 @@ impl TelegramBot {
         self.send_message_with_buttons(
             chat_id,
             &message,
-            vec![
-                vec![
-                    InlineButton { text: "✅ Approve".to_string(), callback_data: format!("approve:{}", token) },
-                    InlineButton { text: "❌ Decline".to_string(), callback_data: format!("decline:{}", token) },
-                ],
-            ],
-        ).await?;
+            vec![vec![
+                InlineButton {
+                    text: "✅ Approve".to_string(),
+                    callback_data: format!("approve:{}", token),
+                },
+                InlineButton {
+                    text: "❌ Decline".to_string(),
+                    callback_data: format!("decline:{}", token),
+                },
+            ]],
+        )
+        .await?;
 
         Ok(())
     }
@@ -262,7 +278,9 @@ impl TelegramBot {
 
         // Handle update approvals
         if action == "approve_update" || action == "reject_update" {
-            return self.handle_update_approval(action, identifier, chat_id).await;
+            return self
+                .handle_update_approval(action, identifier, chat_id)
+                .await;
         }
 
         // Handle auth approvals (existing logic)
@@ -273,7 +291,8 @@ impl TelegramBot {
         let mut session = match session {
             Some(s) => s,
             None => {
-                self.send_message(chat_id, "❌ Session expired or invalid.").await?;
+                self.send_message(chat_id, "❌ Session expired or invalid.")
+                    .await?;
                 return Ok(());
             }
         };
@@ -296,7 +315,8 @@ impl TelegramBot {
         if action == "approve" {
             session.status = AuthStatus::Approved;
             self.upstash.set_json(&key, &session, ttl).await?;
-            self.send_message(chat_id, "✅ Login approved! You can now close this window.").await?;
+            self.send_message(chat_id, "✅ Login approved! You can now close this window.")
+                .await?;
         } else if action == "decline" {
             session.status = AuthStatus::Denied;
             self.upstash.set_json(&key, &session, ttl).await?;
@@ -306,23 +326,29 @@ impl TelegramBot {
         Ok(())
     }
 
-    async fn handle_update_approval(&self, action: &str, witness: &str, chat_id: &str) -> Result<(), String> {
+    async fn handle_update_approval(
+        &self,
+        action: &str,
+        witness: &str,
+        chat_id: &str,
+    ) -> Result<(), String> {
         use crate::updater::telegram::ApprovalStatus;
-        
+
         let approval_key = format!("update_approval:{}", witness);
         let approval: Option<ApprovalStatus> = self.upstash.get_json(&approval_key).await?;
 
         let approval = match approval {
             Some(a) => a,
             None => {
-                self.send_message(chat_id, "❌ Update approval request not found or expired.").await?;
+                self.send_message(chat_id, "❌ Update approval request not found or expired.")
+                    .await?;
                 return Ok(());
             }
         };
 
         // Verify authorized user (you can add user ID check here)
         // For now, we'll allow any authenticated user
-        
+
         let approved = action == "approve_update";
         let new_status = ApprovalStatus {
             witness: approval.witness.clone(),
@@ -332,12 +358,25 @@ impl TelegramBot {
         };
 
         // Store approval status (1 hour TTL)
-        self.upstash.set_json(&approval_key, &new_status, 3600).await?;
+        self.upstash
+            .set_json(&approval_key, &new_status, 3600)
+            .await?;
 
         if approved {
-            self.send_message(chat_id, &format!("✅ Update {} approved! The app will download and install it.", approval.version)).await?;
+            self.send_message(
+                chat_id,
+                &format!(
+                    "✅ Update {} approved! The app will download and install it.",
+                    approval.version
+                ),
+            )
+            .await?;
         } else {
-            self.send_message(chat_id, &format!("❌ Update {} rejected.", approval.version)).await?;
+            self.send_message(
+                chat_id,
+                &format!("❌ Update {} rejected.", approval.version),
+            )
+            .await?;
         }
 
         Ok(())
@@ -411,7 +450,10 @@ impl TelegramBot {
     }
 
     async fn answer_callback(&self, callback_id: &str, text: &str) -> Result<(), String> {
-        let url = format!("https://api.telegram.org/bot{}/answerCallbackQuery", self.bot_token);
+        let url = format!(
+            "https://api.telegram.org/bot{}/answerCallbackQuery",
+            self.bot_token
+        );
 
         #[derive(Serialize)]
         struct AnswerCallbackRequest {

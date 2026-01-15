@@ -30,31 +30,30 @@ pub struct ScanResponse {
 #[tauri::command]
 pub async fn scan_with_clamav(file_path: String) -> Result<ScanResult, String> {
     // Check if ClamAV is installed
-    let clamav_check = Command::new("clamscan")
-        .arg("--version")
-        .output();
-    
+    let clamav_check = Command::new("clamscan").arg("--version").output();
+
     if clamav_check.is_err() {
         // Try alternative command names
-        let alt_check = Command::new("clamdscan")
-            .arg("--version")
-            .output();
-        
+        let alt_check = Command::new("clamdscan").arg("--version").output();
+
         if alt_check.is_err() {
             return Ok(ScanResult {
                 engine: "ClamAV".to_string(),
                 status: ScanStatus::Error,
                 threats: vec![],
-                error: Some("ClamAV is not installed. Please install ClamAV to use this scanner.".to_string()),
+                error: Some(
+                    "ClamAV is not installed. Please install ClamAV to use this scanner."
+                        .to_string(),
+                ),
             });
         }
     }
-    
+
     let file_path_buf = PathBuf::from(&file_path);
     if !file_path_buf.exists() {
         return Err(format!("File not found: {}", file_path));
     }
-    
+
     // Run ClamAV scan
     let output = Command::new("clamscan")
         .arg("--no-summary")
@@ -70,13 +69,13 @@ pub async fn scan_with_clamav(file_path: String) -> Result<ScanResult, String> {
                 .output()
         })
         .map_err(|e| format!("Failed to execute ClamAV: {}", e))?;
-    
+
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
-    
+
     // ClamAV returns exit code 1 if threats found, 0 if clean
     let exit_code = output.status.code().unwrap_or(1);
-    
+
     if exit_code == 0 {
         // Clean
         Ok(ScanResult {
@@ -88,7 +87,7 @@ pub async fn scan_with_clamav(file_path: String) -> Result<ScanResult, String> {
     } else if exit_code == 1 {
         // Infected - parse threats from output
         let mut threats = vec![];
-        
+
         // Parse ClamAV output format: "file_path: ThreatName FOUND"
         for line in stdout.lines().chain(stderr.lines()) {
             if line.contains("FOUND") || line.contains(": ") {
@@ -100,7 +99,7 @@ pub async fn scan_with_clamav(file_path: String) -> Result<ScanResult, String> {
                 }
             }
         }
-        
+
         Ok(ScanResult {
             engine: "ClamAV".to_string(),
             status: ScanStatus::Infected,
@@ -116,7 +115,7 @@ pub async fn scan_with_clamav(file_path: String) -> Result<ScanResult, String> {
         } else {
             format!("ClamAV scan failed with exit code {}", exit_code)
         };
-        
+
         Ok(ScanResult {
             engine: "ClamAV".to_string(),
             status: ScanStatus::Error,
@@ -138,17 +137,17 @@ pub async fn scan_with_windows_defender(file_path: String) -> Result<ScanResult,
             error: Some("Windows Defender is only available on Windows".to_string()),
         });
     }
-    
+
     #[cfg(target_os = "windows")]
     {
         use std::ffi::OsStr;
         use std::os::windows::ffi::OsStrExt;
-        
+
         let file_path_buf = PathBuf::from(&file_path);
         if !file_path_buf.exists() {
             return Err(format!("File not found: {}", file_path));
         }
-        
+
         // Use PowerShell to run Windows Defender scan
         // MpCmdRun.exe is the command-line interface for Windows Defender
         let ps_script = format!(
@@ -173,7 +172,7 @@ pub async fn scan_with_windows_defender(file_path: String) -> Result<ScanResult,
             file_path.replace("\\", "\\\\"),
             file_path.replace("\\", "\\\\")
         );
-        
+
         // Try using MpCmdRun.exe directly first (more reliable)
         let mpcmdrun_path = r"C:\Program Files\Windows Defender\MpCmdRun.exe";
         if PathBuf::from(mpcmdrun_path).exists() {
@@ -181,11 +180,11 @@ pub async fn scan_with_windows_defender(file_path: String) -> Result<ScanResult,
                 .args(&["-Scan", "-ScanType", "1", "-File", &file_path])
                 .output()
                 .map_err(|e| format!("Failed to execute Windows Defender: {}", e))?;
-            
+
             let stdout = String::from_utf8_lossy(&output.stdout);
             let stderr = String::from_utf8_lossy(&output.stderr);
             let exit_code = output.status.code().unwrap_or(1);
-            
+
             if exit_code == 0 {
                 // Check if threats were found in output
                 let output_text = format!("{} {}", stdout, stderr);
@@ -203,7 +202,7 @@ pub async fn scan_with_windows_defender(file_path: String) -> Result<ScanResult,
                             }
                         }
                     }
-                    
+
                     return Ok(ScanResult {
                         engine: "Windows Defender".to_string(),
                         status: ScanStatus::Infected,
@@ -211,7 +210,7 @@ pub async fn scan_with_windows_defender(file_path: String) -> Result<ScanResult,
                         error: None,
                     });
                 }
-                
+
                 return Ok(ScanResult {
                     engine: "Windows Defender".to_string(),
                     status: ScanStatus::Clean,
@@ -227,17 +226,17 @@ pub async fn scan_with_windows_defender(file_path: String) -> Result<ScanResult,
                 });
             }
         }
-        
+
         // Fallback to PowerShell
         let output = Command::new("powershell")
             .args(&["-Command", &ps_script])
             .output()
             .map_err(|e| format!("Failed to execute PowerShell: {}", e))?;
-        
+
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
         let exit_code = output.status.code().unwrap_or(1);
-        
+
         if exit_code == 0 {
             if stdout.contains("CLEAN") {
                 Ok(ScanResult {
@@ -265,7 +264,7 @@ pub async fn scan_with_windows_defender(file_path: String) -> Result<ScanResult,
                     }
                 }
             }
-            
+
             if !threats.is_empty() {
                 Ok(ScanResult {
                     engine: "Windows Defender".to_string(),
@@ -279,7 +278,7 @@ pub async fn scan_with_windows_defender(file_path: String) -> Result<ScanResult,
                 } else {
                     format!("Windows Defender scan failed with exit code {}", exit_code)
                 };
-                
+
                 Ok(ScanResult {
                     engine: "Windows Defender".to_string(),
                     status: ScanStatus::Error,
@@ -298,20 +297,22 @@ pub async fn scan_file(file_path: String) -> Result<ScanResponse, String> {
     if !file_path_buf.exists() {
         return Err(format!("File not found: {}", file_path));
     }
-    
+
     let mut results = ScanResponse {
         clamav: None,
         windows_defender: None,
         overall_status: ScanStatus::Clean,
     };
-    
+
     // Scan with ClamAV (available on all platforms)
     match scan_with_clamav(file_path.clone()).await {
         Ok(result) => {
             results.clamav = Some(result.clone());
             if matches!(result.status, ScanStatus::Infected) {
                 results.overall_status = ScanStatus::Infected;
-            } else if matches!(result.status, ScanStatus::Error) && matches!(results.overall_status, ScanStatus::Clean) {
+            } else if matches!(result.status, ScanStatus::Error)
+                && matches!(results.overall_status, ScanStatus::Clean)
+            {
                 results.overall_status = ScanStatus::Error;
             }
         }
@@ -324,14 +325,16 @@ pub async fn scan_file(file_path: String) -> Result<ScanResponse, String> {
             });
         }
     }
-    
+
     // Scan with Windows Defender (Windows only)
     match scan_with_windows_defender(file_path.clone()).await {
         Ok(result) => {
             results.windows_defender = Some(result.clone());
             if matches!(result.status, ScanStatus::Infected) {
                 results.overall_status = ScanStatus::Infected;
-            } else if matches!(result.status, ScanStatus::Error) && matches!(results.overall_status, ScanStatus::Clean) {
+            } else if matches!(result.status, ScanStatus::Error)
+                && matches!(results.overall_status, ScanStatus::Clean)
+            {
                 results.overall_status = ScanStatus::Error;
             }
         }
@@ -344,6 +347,6 @@ pub async fn scan_file(file_path: String) -> Result<ScanResponse, String> {
             });
         }
     }
-    
+
     Ok(results)
 }

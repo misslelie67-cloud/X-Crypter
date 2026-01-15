@@ -1,11 +1,11 @@
 // API Resolver
 // Resolves Windows APIs dynamically to avoid static imports
 
+use std::ffi::CString;
+use std::ptr;
+use winapi::shared::minwindef::*;
 use winapi::um::libloaderapi::*;
 use winapi::um::winnt::*;
-use winapi::shared::minwindef::*;
-use std::ptr;
-use std::ffi::CString;
 
 /// Hash function for API names (djb2 variant)
 pub fn hash_api_name(name: &str) -> u32 {
@@ -48,7 +48,7 @@ pub unsafe fn get_export_address(
     // Get PE header offset
     let pe_offset = (*dos_header).e_lfanew as usize;
     let nt_headers = module_base.add(pe_offset) as *const IMAGE_NT_HEADERS64;
-    
+
     #[cfg(target_arch = "x86")]
     let nt_headers = module_base.add(pe_offset) as *const IMAGE_NT_HEADERS32;
 
@@ -59,20 +59,22 @@ pub unsafe fn get_export_address(
 
     // Get optional header
     #[cfg(target_arch = "x86_64")]
-    let optional_header = &(*nt_headers).OptionalHeader as *const IMAGE_OPTIONAL_HEADER64 as *const winapi::ctypes::c_void;
-    
+    let optional_header = &(*nt_headers).OptionalHeader as *const IMAGE_OPTIONAL_HEADER64
+        as *const winapi::ctypes::c_void;
+
     #[cfg(target_arch = "x86")]
-    let optional_header = &(*nt_headers).OptionalHeader as *const IMAGE_OPTIONAL_HEADER32 as *const winapi::ctypes::c_void;
+    let optional_header = &(*nt_headers).OptionalHeader as *const IMAGE_OPTIONAL_HEADER32
+        as *const winapi::ctypes::c_void;
 
     // Get export table RVA
     #[cfg(target_arch = "x86_64")]
-    let export_rva = (*(optional_header as *const IMAGE_OPTIONAL_HEADER64))
-        .DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT.0 as usize]
+    let export_rva = (*(optional_header as *const IMAGE_OPTIONAL_HEADER64)).DataDirectory
+        [IMAGE_DIRECTORY_ENTRY_EXPORT.0 as usize]
         .VirtualAddress as usize;
-    
+
     #[cfg(target_arch = "x86")]
-    let export_rva = (*(optional_header as *const IMAGE_OPTIONAL_HEADER32))
-        .DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT.0 as usize]
+    let export_rva = (*(optional_header as *const IMAGE_OPTIONAL_HEADER32)).DataDirectory
+        [IMAGE_DIRECTORY_ENTRY_EXPORT.0 as usize]
         .VirtualAddress as usize;
 
     if export_rva == 0 {
@@ -80,7 +82,7 @@ pub unsafe fn get_export_address(
     }
 
     let export_dir = module_base.add(export_rva) as *const IMAGE_EXPORT_DIRECTORY;
-    
+
     let name_rva = (*export_dir).AddressOfNames as usize;
     let name_ordinals_rva = (*export_dir).AddressOfNameOrdinals as usize;
     let functions_rva = (*export_dir).AddressOfFunctions as usize;
@@ -88,8 +90,9 @@ pub unsafe fn get_export_address(
 
     // Search for function by name
     for i in 0..num_names {
-        let name_ptr = module_base.add(*(module_base.add(name_rva) as *const u32).add(i) as usize) as *const i8;
-        
+        let name_ptr = module_base.add(*(module_base.add(name_rva) as *const u32).add(i) as usize)
+            as *const i8;
+
         // Compare strings
         let mut j = 0;
         let func_name_bytes = function_name.as_bytes();
@@ -98,7 +101,8 @@ pub unsafe fn get_export_address(
             if name_byte == 0 && j >= func_name_bytes.len() {
                 // Found match
                 let ordinal = *(module_base.add(name_ordinals_rva) as *const u16).add(i) as usize;
-                let func_rva = *(module_base.add(functions_rva) as *const u32).add(ordinal) as usize;
+                let func_rva =
+                    *(module_base.add(functions_rva) as *const u32).add(ordinal) as usize;
                 return Some(module_base.add(func_rva) as *mut winapi::ctypes::c_void);
             }
             if j >= func_name_bytes.len() || name_byte != func_name_bytes[j] as i8 {
@@ -112,7 +116,10 @@ pub unsafe fn get_export_address(
 }
 
 /// Resolve API by name
-pub unsafe fn resolve_api(module_name: &str, function_name: &str) -> Option<*mut winapi::ctypes::c_void> {
+pub unsafe fn resolve_api(
+    module_name: &str,
+    function_name: &str,
+) -> Option<*mut winapi::ctypes::c_void> {
     let module_base = get_module_base(module_name);
     if module_base.is_null() {
         return None;
@@ -121,7 +128,10 @@ pub unsafe fn resolve_api(module_name: &str, function_name: &str) -> Option<*mut
 }
 
 /// Resolve API by hash
-pub unsafe fn resolve_api_by_hash(module_name: &str, function_hash: u32) -> Option<*mut winapi::ctypes::c_void> {
+pub unsafe fn resolve_api_by_hash(
+    module_name: &str,
+    function_hash: u32,
+) -> Option<*mut winapi::ctypes::c_void> {
     let module_base = get_module_base(module_name);
     if module_base.is_null() {
         return None;
@@ -135,7 +145,7 @@ pub unsafe fn resolve_api_by_hash(module_name: &str, function_hash: u32) -> Opti
 
     let pe_offset = (*dos_header).e_lfanew as usize;
     let nt_headers = module_base.add(pe_offset) as *const IMAGE_NT_HEADERS64;
-    
+
     #[cfg(target_arch = "x86")]
     let nt_headers = module_base.add(pe_offset) as *const IMAGE_NT_HEADERS32;
 
@@ -147,7 +157,7 @@ pub unsafe fn resolve_api_by_hash(module_name: &str, function_hash: u32) -> Opti
     let export_rva = (*(&(*nt_headers).OptionalHeader as *const IMAGE_OPTIONAL_HEADER64))
         .DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT.0 as usize]
         .VirtualAddress as usize;
-    
+
     #[cfg(target_arch = "x86")]
     let export_rva = (*(&(*nt_headers).OptionalHeader as *const IMAGE_OPTIONAL_HEADER32))
         .DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT.0 as usize]
@@ -165,8 +175,9 @@ pub unsafe fn resolve_api_by_hash(module_name: &str, function_hash: u32) -> Opti
 
     // Search by hash
     for i in 0..num_names {
-        let name_ptr = module_base.add(*(module_base.add(name_rva) as *const u32).add(i) as usize) as *const i8;
-        
+        let name_ptr = module_base.add(*(module_base.add(name_rva) as *const u32).add(i) as usize)
+            as *const i8;
+
         // Build function name string
         let mut name_bytes = Vec::new();
         let mut j = 0;
@@ -181,13 +192,14 @@ pub unsafe fn resolve_api_by_hash(module_name: &str, function_hash: u32) -> Opti
                 break;
             }
         }
-        
+
         if let Ok(name_str) = String::from_utf8(name_bytes) {
             let hash = hash_api_name(&name_str);
             if hash == function_hash {
                 // Found match
                 let ordinal = *(module_base.add(name_ordinals_rva) as *const u16).add(i) as usize;
-                let func_rva = *(module_base.add(functions_rva) as *const u32).add(ordinal) as usize;
+                let func_rva =
+                    *(module_base.add(functions_rva) as *const u32).add(ordinal) as usize;
                 return Some(module_base.add(func_rva) as *mut winapi::ctypes::c_void);
             }
         }

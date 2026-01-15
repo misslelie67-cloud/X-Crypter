@@ -1,19 +1,19 @@
 // Anti-Analysis Techniques
 // Detects and evades debuggers, VMs, and sandboxes
 
-use winapi::um::winnt::*;
-use winapi::um::processthreadsapi::*;
-use winapi::um::winuser::*;
-use winapi::um::sysinfoapi::*;
-use winapi::um::tlhelp32::*;
-use winapi::um::winreg::*;
-use winapi::um::libloaderapi::*;
-use winapi::um::handleapi::*;
-use winapi::um::errhandlingapi::*;
+use std::ffi::CString;
+use std::ptr;
 use winapi::shared::minwindef::*;
 use winapi::shared::ntdef::HANDLE;
-use std::ptr;
-use std::ffi::CString;
+use winapi::um::errhandlingapi::*;
+use winapi::um::handleapi::*;
+use winapi::um::libloaderapi::*;
+use winapi::um::processthreadsapi::*;
+use winapi::um::sysinfoapi::*;
+use winapi::um::tlhelp32::*;
+use winapi::um::winnt::*;
+use winapi::um::winreg::*;
+use winapi::um::winuser::*;
 
 /// Check if debugger is present via PEB BeingDebugged flag
 pub unsafe fn check_peb_being_debugged() -> bool {
@@ -26,16 +26,16 @@ pub unsafe fn check_peb_being_debugged() -> bool {
             out(reg) peb,
             options(nostack, nomem, preserves_flags)
         );
-        
+
         if peb.is_null() {
             return false;
         }
-        
+
         // BeingDebugged is at offset 0x02
         let being_debugged = *peb.add(0x02);
         being_debugged != 0
     }
-    
+
     #[cfg(target_arch = "x86")]
     {
         // x86: PEB is at FS:[0x30]
@@ -45,16 +45,16 @@ pub unsafe fn check_peb_being_debugged() -> bool {
             out(reg) peb,
             options(nostack, nomem, preserves_flags)
         );
-        
+
         if peb.is_null() {
             return false;
         }
-        
+
         // BeingDebugged is at offset 0x02
         let being_debugged = *peb.add(0x02);
         being_debugged != 0
     }
-    
+
     #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
     {
         false
@@ -73,7 +73,7 @@ pub unsafe fn check_nt_query_debug_port() -> bool {
     if ntdll.is_null() {
         return false;
     }
-    
+
     type NtQueryInformationProcess = extern "system" fn(
         ProcessHandle: HANDLE,
         ProcessInformationClass: u32,
@@ -81,17 +81,15 @@ pub unsafe fn check_nt_query_debug_port() -> bool {
         ProcessInformationLength: u32,
         ReturnLength: *mut u32,
     ) -> i32;
-    
+
     let func_name = CString::new("NtQueryInformationProcess").unwrap();
-    let nt_query = GetProcAddress(
-        ntdll,
-        func_name.as_ptr() as *const i8,
-    ) as *const NtQueryInformationProcess;
-    
+    let nt_query =
+        GetProcAddress(ntdll, func_name.as_ptr() as *const i8) as *const NtQueryInformationProcess;
+
     if nt_query.is_null() {
         return false;
     }
-    
+
     // ProcessDebugPort = 0x07
     let mut debug_port: usize = 0;
     let status = (*nt_query)(
@@ -101,7 +99,7 @@ pub unsafe fn check_nt_query_debug_port() -> bool {
         std::mem::size_of::<usize>() as u32,
         ptr::null_mut(),
     );
-    
+
     // If debug port is set, debugger is present
     status == 0 && debug_port != 0
 }
@@ -111,7 +109,7 @@ pub unsafe fn check_timing_debugger() -> bool {
     let start = GetTickCount();
     Sleep(10);
     let elapsed = GetTickCount().wrapping_sub(start);
-    
+
     // Debugger adds delay, so elapsed time will be > 50ms
     elapsed > 50
 }
@@ -120,23 +118,23 @@ pub unsafe fn check_timing_debugger() -> bool {
 pub unsafe fn check_hardware_breakpoints() -> bool {
     let mut ctx: CONTEXT = std::mem::zeroed();
     ctx.ContextFlags = CONTEXT_DEBUG_REGISTERS;
-    
+
     let thread = GetCurrentThread();
     if GetThreadContext(thread, &mut ctx) == 0 {
         return false;
     }
-    
+
     // Check if any debug registers are set
     #[cfg(target_arch = "x86_64")]
     {
         ctx.Dr0 != 0 || ctx.Dr1 != 0 || ctx.Dr2 != 0 || ctx.Dr3 != 0
     }
-    
+
     #[cfg(target_arch = "x86")]
     {
         ctx.Dr0 != 0 || ctx.Dr1 != 0 || ctx.Dr2 != 0 || ctx.Dr3 != 0
     }
-    
+
     #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
     {
         false
@@ -148,18 +146,19 @@ pub unsafe fn check_vm_registry() -> bool {
     // Check for VirtualBox
     let vbox_key = CString::new("SYSTEM\\CurrentControlSet\\Services\\VBoxGuest").unwrap();
     let mut hkey: HKEY = ptr::null_mut();
-    
+
     if RegOpenKeyExA(
         HKEY_LOCAL_MACHINE,
         vbox_key.as_ptr() as *const i8,
         0,
         KEY_READ,
         &mut hkey,
-    ) == ERROR_SUCCESS {
+    ) == ERROR_SUCCESS
+    {
         RegCloseKey(hkey);
         return true;
     }
-    
+
     // Check for VMware
     let vmware_key = CString::new("HARDWARE\\Description\\System").unwrap();
     if RegOpenKeyExA(
@@ -168,12 +167,13 @@ pub unsafe fn check_vm_registry() -> bool {
         0,
         KEY_READ,
         &mut hkey,
-    ) == ERROR_SUCCESS {
+    ) == ERROR_SUCCESS
+    {
         let mut value_name = [0u8; 256];
         let mut value_type: DWORD = 0;
         let mut value_data = [0u8; 256];
         let mut value_size: DWORD = 256;
-        
+
         let mut index = 0u32;
         while RegEnumValueA(
             hkey,
@@ -184,7 +184,8 @@ pub unsafe fn check_vm_registry() -> bool {
             &mut value_type,
             value_data.as_mut_ptr(),
             &mut value_size,
-        ) == ERROR_SUCCESS {
+        ) == ERROR_SUCCESS
+        {
             let value_str = String::from_utf8_lossy(&value_data[..value_size as usize]);
             if value_str.contains("VMware") || value_str.contains("VMwareVMware") {
                 RegCloseKey(hkey);
@@ -195,7 +196,7 @@ pub unsafe fn check_vm_registry() -> bool {
         }
         RegCloseKey(hkey);
     }
-    
+
     false
 }
 
@@ -205,15 +206,15 @@ pub unsafe fn check_vm_processes() -> bool {
     if snapshot == INVALID_HANDLE_VALUE {
         return false;
     }
-    
+
     let mut entry: PROCESSENTRY32 = std::mem::zeroed();
     entry.dwSize = std::mem::size_of::<PROCESSENTRY32>() as u32;
-    
+
     if Process32First(snapshot, &mut entry) == 0 {
         CloseHandle(snapshot);
         return false;
     }
-    
+
     let vm_processes = [
         b"vmtoolsd.exe\0",
         b"VBoxService.exe\0",
@@ -221,34 +222,37 @@ pub unsafe fn check_vm_processes() -> bool {
         b"vmwaretray.exe\0",
         b"vmwareuser.exe\0",
     ];
-    
+
     loop {
         // Convert entry.szExeFile to string (null-terminated)
-        let entry_name_bytes = entry.szExeFile.iter()
+        let entry_name_bytes = entry
+            .szExeFile
+            .iter()
             .take_while(|&&b| b != 0)
             .copied()
             .collect::<Vec<u8>>();
         let entry_name = String::from_utf8_lossy(&entry_name_bytes).to_lowercase();
-        
+
         for vm_proc in &vm_processes {
             // Remove null terminator for comparison
-            let proc_name_bytes = vm_proc.iter()
+            let proc_name_bytes = vm_proc
+                .iter()
                 .take_while(|&&b| b != 0)
                 .copied()
                 .collect::<Vec<u8>>();
             let proc_name = String::from_utf8_lossy(&proc_name_bytes).to_lowercase();
-            
+
             if entry_name == proc_name {
                 CloseHandle(snapshot);
                 return true;
             }
         }
-        
+
         if Process32Next(snapshot, &mut entry) == 0 {
             break;
         }
     }
-    
+
     CloseHandle(snapshot);
     false
 }
@@ -262,7 +266,7 @@ pub unsafe fn check_vm_cpuid() -> bool {
         let mut ebx: u32 = 0;
         let mut ecx: u32 = 0;
         let mut edx: u32 = 0;
-        
+
         std::arch::asm!(
             "cpuid",
             inout("eax") eax,
@@ -271,7 +275,7 @@ pub unsafe fn check_vm_cpuid() -> bool {
             out("edx") edx,
             options(nostack, preserves_flags)
         );
-        
+
         // Check hypervisor bit
         if (ecx & (1 << 31)) != 0 {
             // Check vendor string
@@ -285,14 +289,12 @@ pub unsafe fn check_vm_cpuid() -> bool {
                 out("edx") vendor[2],
                 options(nostack, preserves_flags)
             );
-            
+
             // Check for known VM vendor strings
-            let vendor_bytes = std::slice::from_raw_parts(
-                vendor.as_ptr() as *const u8,
-                vendor.len() * 4,
-            );
+            let vendor_bytes =
+                std::slice::from_raw_parts(vendor.as_ptr() as *const u8, vendor.len() * 4);
             let vendor_str = String::from_utf8_lossy(vendor_bytes);
-            
+
             if vendor_str.contains("VMwareVMware")
                 || vendor_str.contains("VBoxVBoxVBox")
                 || vendor_str.contains("Microsoft Hv")
@@ -301,25 +303,25 @@ pub unsafe fn check_vm_cpuid() -> bool {
             }
         }
     }
-    
+
     #[cfg(target_arch = "x86")]
     {
         // Similar for x86
         let mut eax: u32 = 1;
         let mut ecx: u32 = 0;
-        
+
         std::arch::asm!(
             "cpuid",
             inout("eax") eax,
             out("ecx") ecx,
             options(nostack, preserves_flags)
         );
-        
+
         if (ecx & (1 << 31)) != 0 {
             return true;
         }
     }
-    
+
     false
 }
 
@@ -327,17 +329,17 @@ pub unsafe fn check_vm_cpuid() -> bool {
 pub unsafe fn check_sandbox_mouse() -> bool {
     let mut point1: POINT = std::mem::zeroed();
     let mut point2: POINT = std::mem::zeroed();
-    
+
     if GetCursorPos(&mut point1) == 0 {
         return false;
     }
-    
+
     Sleep(5000); // Wait 5 seconds
-    
+
     if GetCursorPos(&mut point2) == 0 {
         return false;
     }
-    
+
     // If mouse hasn't moved, likely a sandbox
     point1.x == point2.x && point1.y == point2.y
 }
@@ -350,16 +352,16 @@ pub unsafe fn check_sandbox_runtime() -> bool {
         // Less than 2 minutes uptime
         return true;
     }
-    
+
     // Check number of processes (sandboxes have few)
     let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if snapshot == INVALID_HANDLE_VALUE {
         return false;
     }
-    
+
     let mut entry: PROCESSENTRY32 = std::mem::zeroed();
     entry.dwSize = std::mem::size_of::<PROCESSENTRY32>() as u32;
-    
+
     let mut process_count = 0u32;
     if Process32First(snapshot, &mut entry) != 0 {
         loop {
@@ -369,14 +371,14 @@ pub unsafe fn check_sandbox_runtime() -> bool {
             }
         }
     }
-    
+
     CloseHandle(snapshot);
-    
+
     // Sandboxes typically have < 50 processes
     if process_count < 50 {
         return true;
     }
-    
+
     false
 }
 
@@ -389,7 +391,7 @@ pub unsafe fn check_sandbox_dlls() -> bool {
         b"pstorec.dll\0",
         b"vmcheck.dll\0",
     ];
-    
+
     for dll_name in &sandbox_dlls {
         let dll_cstr = CString::from_vec_with_nul(dll_name.to_vec()).unwrap();
         let module = GetModuleHandleA(dll_cstr.as_ptr() as *const i8);
@@ -397,7 +399,7 @@ pub unsafe fn check_sandbox_dlls() -> bool {
             return true;
         }
     }
-    
+
     false
 }
 
@@ -420,7 +422,7 @@ pub unsafe fn check_environment(anti_debug: bool, anti_vm: bool) -> bool {
             return true;
         }
     }
-    
+
     if anti_vm {
         if check_vm_registry() {
             return true; // VM detected
@@ -432,7 +434,7 @@ pub unsafe fn check_environment(anti_debug: bool, anti_vm: bool) -> bool {
             return true;
         }
     }
-    
+
     // Always check for sandbox (critical)
     if check_sandbox_mouse() {
         return true; // Sandbox detected
@@ -443,7 +445,7 @@ pub unsafe fn check_environment(anti_debug: bool, anti_vm: bool) -> bool {
     if check_sandbox_dlls() {
         return true;
     }
-    
+
     false // Environment is clean
 }
 

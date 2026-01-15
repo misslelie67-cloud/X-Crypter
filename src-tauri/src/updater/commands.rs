@@ -1,9 +1,9 @@
 // Tauri Commands for Update System
 
-use crate::updater::*;
 use crate::storage::UpstashClient;
-use tauri::State;
+use crate::updater::*;
 use serde::{Deserialize, Serialize};
+use tauri::State;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CheckUpdateResponse {
@@ -12,7 +12,7 @@ pub struct CheckUpdateResponse {
     pub version: Option<String>,
     pub changelog: Option<String>,
     pub error: Option<String>,
-    pub witness: Option<String>,  // Add witness to response
+    pub witness: Option<String>, // Add witness to response
 }
 
 /// Check for available updates
@@ -23,14 +23,13 @@ pub async fn check_for_updates(
     // Try to reload .env file in case it wasn't loaded at startup
     // This helps when running in different contexts
     let _ = dotenvy::dotenv();
-    
-    let config = UpdateConfig::from_env()
-        .map_err(|e| {
-            // Provide helpful error message
-            format!("{} - Make sure WITNESS_SECRET is set in your .env file", e)
-        })?;
+
+    let config = UpdateConfig::from_env().map_err(|e| {
+        // Provide helpful error message
+        format!("{} - Make sure WITNESS_SECRET is set in your .env file", e)
+    })?;
     let current_version = get_current_version();
-    
+
     // Fetch update info from Upstash (preferred) or external server
     let update_info: UpdateInfo = if let Some(update_info) = upstash.get_update_metadata().await? {
         // Found in Upstash
@@ -39,12 +38,8 @@ pub async fn check_for_updates(
         // Fallback to external server if configured
         let client = reqwest::Client::new();
         let update_url = format!("{}/api/updates/latest", server_url);
-        
-        let response = match client
-            .get(&update_url)
-            .send()
-            .await
-        {
+
+        let response = match client.get(&update_url).send().await {
             Ok(resp) => resp,
             Err(e) => {
                 return Ok(CheckUpdateResponse {
@@ -57,7 +52,7 @@ pub async fn check_for_updates(
                 });
             }
         };
-        
+
         if !response.status().is_success() {
             return Ok(CheckUpdateResponse {
                 status: "error".to_string(),
@@ -68,7 +63,7 @@ pub async fn check_for_updates(
                 witness: None,
             });
         }
-        
+
         response
             .json()
             .await
@@ -84,7 +79,7 @@ pub async fn check_for_updates(
             witness: None,
         });
     };
-    
+
     // Verify witness signature
     if !verify_witness(&update_info, &config.witness_secret) {
         return Ok(CheckUpdateResponse {
@@ -96,7 +91,7 @@ pub async fn check_for_updates(
             witness: None,
         });
     }
-    
+
     // Check if witness is expired (older than 1 hour)
     if is_witness_expired(update_info.timestamp) {
         return Ok(CheckUpdateResponse {
@@ -108,10 +103,10 @@ pub async fn check_for_updates(
             witness: None,
         });
     }
-    
+
     // Check if update is needed
     let update_needed = is_update_needed(&update_info);
-    
+
     if !update_needed {
         return Ok(CheckUpdateResponse {
             status: "up_to_date".to_string(),
@@ -122,7 +117,7 @@ pub async fn check_for_updates(
             witness: None,
         });
     }
-    
+
     // Send beacon to Telegram for approval
     let witness_request = WitnessRequest::from_update_info(&update_info);
     if let Err(e) = telegram::send_update_beacon(&witness_request, &config, &upstash).await {
@@ -135,7 +130,7 @@ pub async fn check_for_updates(
             witness: None,
         });
     }
-    
+
     Ok(CheckUpdateResponse {
         status: "waiting_approval".to_string(),
         update_available: true,
@@ -162,15 +157,16 @@ pub async fn install_update(
     upstash: State<'_, UpstashClient>,
 ) -> Result<String, String> {
     let config = UpdateConfig::from_env()?;
-    
+
     // Verify approval
-    let approved = telegram::check_approval_status(&witness, &upstash).await?
+    let approved = telegram::check_approval_status(&witness, &upstash)
+        .await?
         .ok_or("Approval not found")?;
-    
+
     if !approved {
         return Err("Update not approved".to_string());
     }
-    
+
     // Fetch update info again from Upstash or external server
     let update_info: UpdateInfo = if let Some(update_info) = upstash.get_update_metadata().await? {
         update_info
@@ -188,48 +184,54 @@ pub async fn install_update(
     } else {
         return Err("No update source available".to_string());
     };
-    
+
     // Verify witness matches
     if update_info.witness != witness {
         return Err("Witness mismatch".to_string());
     }
-    
+
     // Download update
     let update_file = download::download_update(&update_info, &config, None).await?;
-    
+
     // Extract ZIP file to staging
     let staging_dir = install::extract_update_zip(&update_file)?;
-    
+
     // Try to apply update immediately (replace crypter modules)
     // If files are locked, we'll mark as pending for next startup
     let apply_result = install::apply_crypter_update(&staging_dir);
-    
+
     match apply_result {
         Ok(_) => {
             // Successfully applied - store version and clean up
             version::store_version_info(&update_info)?;
-            
+
             // Clean up staging directory
             if staging_dir.exists() {
                 std::fs::remove_dir_all(&staging_dir).ok();
             }
-            
+
             // Clean up downloaded ZIP
             std::fs::remove_file(&update_file).ok();
-            
-            Ok(format!("Update {} installed successfully! The app will restart now.", update_info.version))
+
+            Ok(format!(
+                "Update {} installed successfully! The app will restart now.",
+                update_info.version
+            ))
         }
         Err(e) => {
             // Files might be locked - mark as pending for next startup
             install::mark_update_pending(&update_info)?;
-            
+
             // Keep ZIP file for next startup
             // Clean up staging directory
             if staging_dir.exists() {
                 std::fs::remove_dir_all(&staging_dir).ok();
             }
-            
-            Ok(format!("Update {} downloaded. Will be applied on next app restart. Error: {}", update_info.version, e))
+
+            Ok(format!(
+                "Update {} downloaded. Will be applied on next app restart. Error: {}",
+                update_info.version, e
+            ))
         }
     }
 }

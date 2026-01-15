@@ -33,11 +33,10 @@ impl EncryptionKeys {
     /// Note: Will be used when embedding keys in stub (currently keys are XOR obfuscated)
     #[allow(dead_code)]
     pub fn to_base64(&self) -> String {
-        let json = serde_json::to_string(self)
-            .expect("Failed to serialize keys");
+        let json = serde_json::to_string(self).expect("Failed to serialize keys");
         // Use base64 crate - check which API version 0.22 uses
         // For 0.22, it should be base64::encode or base64::engine
-        use base64::{Engine as _, engine::general_purpose};
+        use base64::{engine::general_purpose, Engine as _};
         general_purpose::STANDARD.encode(json.as_bytes())
     }
 
@@ -45,13 +44,13 @@ impl EncryptionKeys {
     /// Note: Will be used for key retrieval/deserialization
     #[allow(dead_code)]
     pub fn from_base64(encoded: &str) -> Result<Self, String> {
-        use base64::{Engine as _, engine::general_purpose};
-        let decoded = general_purpose::STANDARD.decode(encoded)
+        use base64::{engine::general_purpose, Engine as _};
+        let decoded = general_purpose::STANDARD
+            .decode(encoded)
             .map_err(|e| format!("Failed to decode base64: {}", e))?;
-        let json = String::from_utf8(decoded)
-            .map_err(|e| format!("Failed to decode UTF-8: {}", e))?;
-        serde_json::from_str(&json)
-            .map_err(|e| format!("Failed to deserialize keys: {}", e))
+        let json =
+            String::from_utf8(decoded).map_err(|e| format!("Failed to decode UTF-8: {}", e))?;
+        serde_json::from_str(&json).map_err(|e| format!("Failed to deserialize keys: {}", e))
     }
 
     /// Generate random key of specified length
@@ -95,18 +94,18 @@ impl KeyStorage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::crypter::encryptor::{Encryptor, EncryptionMethod};
+    use crate::crypter::encryptor::{EncryptionMethod, Encryptor};
 
     #[test]
     fn test_key_serialization() {
         let encryptor = Encryptor::new(EncryptionMethod::AES256);
         let data = b"test data";
         let result = encryptor.encrypt_data(data).unwrap();
-        
+
         let keys = EncryptionKeys::from_result(&result);
         let encoded = keys.to_base64();
         let decoded = EncryptionKeys::from_base64(&encoded).unwrap();
-        
+
         assert_eq!(keys.key, decoded.key);
         assert_eq!(keys.iv, decoded.iv);
     }
