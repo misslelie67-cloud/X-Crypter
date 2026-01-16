@@ -141,9 +141,6 @@ pub async fn scan_with_windows_defender(file_path: String) -> Result<ScanResult,
 
     #[cfg(target_os = "windows")]
     {
-        use std::ffi::OsStr;
-        use std::os::windows::ffi::OsStrExt;
-
         let file_path_buf = PathBuf::from(&file_path);
         if !file_path_buf.exists() {
             return Err(format!("File not found: {}", file_path));
