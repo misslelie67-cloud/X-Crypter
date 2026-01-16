@@ -130,12 +130,13 @@ pub async fn scan_with_clamav(file_path: String) -> Result<ScanResult, String> {
 pub async fn scan_with_windows_defender(file_path: String) -> Result<ScanResult, String> {
     #[cfg(not(target_os = "windows"))]
     {
-        return Ok(ScanResult {
+        let _ = file_path;
+        Ok(ScanResult {
             engine: "Windows Defender".to_string(),
             status: ScanStatus::Error,
             threats: vec![],
             error: Some("Windows Defender is only available on Windows".to_string()),
-        });
+        })
     }
 
     #[cfg(target_os = "windows")]

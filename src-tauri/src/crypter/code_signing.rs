@@ -1,8 +1,7 @@
 // Code Signing
 // Signs the compiled executable with a certificate to make it look legitimate
 
-use std::path::PathBuf;
-use std::process::Command;
+use std::path::{Path, PathBuf};
 
 /// Find signtool.exe path on Windows
 #[cfg(target_os = "windows")]
@@ -46,7 +45,7 @@ fn find_signtool() -> Result<String, String> {
     for path in &signtool_paths {
         if path == "signtool.exe" {
             // Check if it's in PATH
-            if Command::new("where")
+            if std::process::Command::new("where")
                 .arg("signtool.exe")
                 .output()
                 .map(|o| o.status.success())
@@ -67,16 +66,17 @@ fn find_signtool() -> Result<String, String> {
 
 /// Sign executable with certificate using signtool.exe
 pub fn sign_executable(
-    exe_path: &PathBuf,
+    exe_path: &Path,
     certificate_path: &str,
     certificate_password: &str,
 ) -> Result<(), String> {
     #[cfg(not(target_os = "windows"))]
     {
-        return Err(
+        let _ = (exe_path, certificate_path, certificate_password);
+        Err(
             "Code signing is only available on Windows. signtool.exe is a Windows SDK tool."
                 .to_string(),
-        );
+        )
     }
 
     #[cfg(target_os = "windows")]
@@ -96,7 +96,7 @@ pub fn sign_executable(
 
         // Build signtool command
         // signtool sign /f certificate.pfx /p password /t http://timestamp.digicert.com /fd sha256 executable.exe
-        let output = Command::new(&signtool_path)
+        let output = std::process::Command::new(&signtool_path)
             .args(&[
                 "sign",
                 "/f",
@@ -130,10 +130,11 @@ pub fn sign_executable(
 }
 
 /// Verify if executable is signed
-pub fn verify_signature(exe_path: &PathBuf) -> Result<bool, String> {
+pub fn verify_signature(exe_path: &Path) -> Result<bool, String> {
     #[cfg(not(target_os = "windows"))]
     {
-        return Err("Signature verification is only available on Windows. signtool.exe is a Windows SDK tool.".to_string());
+        let _ = exe_path;
+        Err("Signature verification is only available on Windows. signtool.exe is a Windows SDK tool.".to_string())
     }
 
     #[cfg(target_os = "windows")]
@@ -146,7 +147,7 @@ pub fn verify_signature(exe_path: &PathBuf) -> Result<bool, String> {
 
         // Verify signature
         // signtool verify /pa executable.exe
-        let output = Command::new(&signtool_path)
+        let output = std::process::Command::new(&signtool_path)
             .args(&["verify", "/pa"])
             .arg(exe_path)
             .output()

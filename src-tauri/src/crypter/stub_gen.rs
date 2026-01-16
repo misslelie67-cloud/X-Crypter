@@ -559,11 +559,11 @@ pub fn write_stub_code(stub_code: &str) -> Result<PathBuf, String> {
 }
 
 /// Compile stub to executable
-pub fn compile_stub(output_path: &PathBuf) -> Result<PathBuf, String> {
+pub fn compile_stub(_output_path: &PathBuf) -> Result<PathBuf, String> {
     // Check if we're on Windows - stub is Windows-only
     #[cfg(not(target_os = "windows"))]
     {
-        return Err("Stub compilation requires Windows. The stub is a Windows PE executable that can only be compiled on Windows. Please use a Windows machine or cross-compile from Windows.".to_string());
+        Err("Stub compilation requires Windows. The stub is a Windows PE executable that can only be compiled on Windows. Please use a Windows machine or cross-compile from Windows.".to_string())
     }
 
     #[cfg(target_os = "windows")]
