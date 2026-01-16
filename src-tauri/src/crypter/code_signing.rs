@@ -1,7 +1,7 @@
 // Code Signing
 // Signs the compiled executable with a certificate to make it look legitimate
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 /// Find signtool.exe path on Windows
 #[cfg(target_os = "windows")]
