@@ -559,36 +559,56 @@ pub fn write_stub_code(stub_code: &str) -> Result<PathBuf, String> {
 }
 
 /// Compile stub to executable
-pub fn compile_stub(_output_path: &PathBuf) -> Result<PathBuf, String> {
+pub fn compile_stub(output_path: &PathBuf) -> Result<PathBuf, String> {
+    eprintln!("🔨 Starting stub compilation...");
+    eprintln!("📁 Output path: {}", output_path.display());
+    
     // Check if we're on Windows - stub is Windows-only
     #[cfg(not(target_os = "windows"))]
     {
+        eprintln!("❌ Stub compilation requires Windows");
         Err("Stub compilation requires Windows. The stub is a Windows PE executable that can only be compiled on Windows. Please use a Windows machine or cross-compile from Windows.".to_string())
     }
 
     #[cfg(target_os = "windows")]
     {
+        eprintln!("✅ Running on Windows, proceeding with compilation");
+        
         let project_root = find_project_root()?;
+        eprintln!("📂 Project root: {}", project_root.display());
+        
         let stub_dir = project_root.join("stub");
         let stub_cargo = stub_dir.join("Cargo.toml");
+        eprintln!("📄 Stub Cargo.toml: {}", stub_cargo.display());
 
         if !stub_cargo.exists() {
+            eprintln!("❌ Stub Cargo.toml not found at: {}", stub_cargo.display());
             return Err(format!(
                 "Stub Cargo.toml not found at: {}. Make sure stub/ directory exists in project root.",
                 stub_cargo.display()
             ));
         }
 
+        eprintln!("🔨 Compiling stub with cargo...");
         // Compile stub
         let output = Command::new("cargo")
             .args(&["build", "--release", "--manifest-path"])
             .arg(&stub_cargo)
             .current_dir(&project_root)
             .output()
-            .map_err(|e| format!("Failed to execute cargo: {}", e))?;
+            .map_err(|e| {
+                eprintln!("❌ Failed to execute cargo: {}", e);
+                format!("Failed to execute cargo: {}", e)
+            })?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
+            eprintln!("❌ Stub compilation failed");
+            eprintln!("📋 Error output (first 20 lines):");
+            for (i, line) in stderr.lines().take(20).enumerate() {
+                eprintln!("  {}: {}", i + 1, line);
+            }
+            
             // Extract just the key error messages, not the full verbose output
             let error_lines: Vec<&str> = stderr
                 .lines()
@@ -603,16 +623,26 @@ pub fn compile_stub(_output_path: &PathBuf) -> Result<PathBuf, String> {
             return Err(format!("Compilation failed: {}", error_lines.join("; ")));
         }
 
+        eprintln!("✅ Stub compilation successful");
+        
         // Find compiled executable
         let compiled_exe = stub_dir.join("target/release/stub.exe");
+        eprintln!("🔍 Looking for compiled stub at: {}", compiled_exe.display());
+        
         if !compiled_exe.exists() {
+            eprintln!("❌ Compiled stub executable not found at: {}", compiled_exe.display());
             return Err("Compiled stub executable not found".to_string());
         }
 
+        eprintln!("📋 Copying stub from {} to {}", compiled_exe.display(), output_path.display());
         // Copy to output location
         fs::copy(&compiled_exe, output_path)
-            .map_err(|e| format!("Failed to copy compiled stub: {}", e))?;
+            .map_err(|e| {
+                eprintln!("❌ Failed to copy compiled stub: {}", e);
+                format!("Failed to copy compiled stub: {}", e)
+            })?;
 
+        eprintln!("✅ Stub compilation and copy completed successfully");
         Ok(output_path.clone())
     }
 }
