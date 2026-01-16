@@ -734,29 +734,46 @@ pub fn compile_stub(output_path: &PathBuf) -> Result<PathBuf, String> {
         eprintln!("✅ Successfully copied {} bytes", bytes_copied);
 
         // Verify the copy was successful
-        if output_path.exists() {
-            let copied_metadata = fs::metadata(output_path).map_err(|e| {
-                eprintln!("⚠️ Warning: Failed to verify copied file: {}", e);
-                e
-            });
-            if let Ok(meta) = copied_metadata {
-                eprintln!("✅ Copied file verified: {} bytes", meta.len());
-                if meta.len() == bytes_copied {
-                    eprintln!("✅ File sizes match");
-                } else {
-                    eprintln!(
-                        "⚠️ Warning: File sizes don't match (expected: {}, actual: {})",
-                        bytes_copied,
-                        meta.len()
-                    );
-                }
-            }
-        } else {
+        if !output_path.exists() {
             eprintln!("❌ ERROR: Copied file does not exist after copy operation!");
-            return Err("Copied file verification failed".to_string());
+            eprintln!("❌ Expected file at: {}", output_path.display());
+            return Err(format!(
+                "Copied file verification failed: file does not exist at {}",
+                output_path.display()
+            ));
+        }
+
+        let copied_metadata = fs::metadata(output_path).map_err(|e| {
+            eprintln!("❌ ERROR: Failed to verify copied file: {}", e);
+            eprintln!("❌ File exists but cannot read metadata");
+            format!("Failed to verify copied file: {}", e)
+        })?;
+
+        eprintln!("✅ Copied file verified: {} bytes", copied_metadata.len());
+        if copied_metadata.len() == bytes_copied {
+            eprintln!("✅ File sizes match");
+        } else {
+            eprintln!(
+                "⚠️ Warning: File sizes don't match (expected: {}, actual: {})",
+                bytes_copied,
+                copied_metadata.len()
+            );
+            // Don't fail on size mismatch, but log it
+        }
+
+        // Final verification: try to read a small portion of the file
+        if let Ok(mut file) = fs::File::open(output_path) {
+            use std::io::Read;
+            let mut buffer = [0u8; 4];
+            if file.read_exact(&mut buffer).is_ok() {
+                eprintln!("✅ File is readable (verified by reading first 4 bytes)");
+            } else {
+                eprintln!("⚠️ Warning: File exists but may not be fully readable");
+            }
         }
 
         eprintln!("✅ Stub compilation and copy completed successfully");
+        eprintln!("📁 Final output path: {}", output_path.display());
         Ok(output_path.clone())
     }
 }
