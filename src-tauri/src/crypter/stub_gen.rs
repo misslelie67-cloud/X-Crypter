@@ -631,16 +631,109 @@ pub fn compile_stub(output_path: &PathBuf) -> Result<PathBuf, String> {
         
         if !compiled_exe.exists() {
             eprintln!("❌ Compiled stub executable not found at: {}", compiled_exe.display());
+            eprintln!("📂 Checking if target/release directory exists...");
+            let target_dir = stub_dir.join("target/release");
+            if target_dir.exists() {
+                eprintln!("✅ target/release directory exists");
+                eprintln!("📋 Contents of target/release:");
+                if let Ok(entries) = std::fs::read_dir(&target_dir) {
+                    for entry in entries.flatten() {
+                        eprintln!("  - {}", entry.path().display());
+                    }
+                }
+            } else {
+                eprintln!("❌ target/release directory does not exist");
+            }
             return Err("Compiled stub executable not found".to_string());
         }
 
+        // Verify source file is readable
+        let metadata = fs::metadata(&compiled_exe)
+            .map_err(|e| {
+                eprintln!("❌ Failed to read metadata of compiled stub: {}", e);
+                format!("Failed to read metadata of compiled stub: {}", e)
+            })?;
+        eprintln!("📊 Compiled stub size: {} bytes", metadata.len());
+        eprintln!("📊 Compiled stub is readable: {}", metadata.permissions().readonly());
+
+        // Ensure output directory exists
+        if let Some(parent) = output_path.parent() {
+            if !parent.exists() {
+                eprintln!("📁 Creating output directory: {}", parent.display());
+                fs::create_dir_all(parent)
+                    .map_err(|e| {
+                        eprintln!("❌ Failed to create output directory: {}", e);
+                        format!("Failed to create output directory: {}", e)
+                    })?;
+            }
+            eprintln!("✅ Output directory exists: {}", parent.display());
+            
+            // Check if output directory is writable
+            let test_file = parent.join(".write_test");
+            if fs::write(&test_file, b"test").is_ok() {
+                let _ = fs::remove_file(&test_file);
+                eprintln!("✅ Output directory is writable");
+            } else {
+                eprintln!("⚠️ Warning: Output directory may not be writable");
+            }
+        }
+
+        // Check if output file already exists
+        if output_path.exists() {
+            eprintln!("⚠️ Output file already exists, will overwrite: {}", output_path.display());
+            let existing_metadata = fs::metadata(output_path)
+                .map_err(|e| {
+                    eprintln!("⚠️ Warning: Failed to read existing file metadata: {}", e);
+                    e
+                });
+            if let Ok(meta) = existing_metadata {
+                eprintln!("📊 Existing file size: {} bytes", meta.len());
+            }
+        }
+
         eprintln!("📋 Copying stub from {} to {}", compiled_exe.display(), output_path.display());
+        eprintln!("📋 Source file exists: {}", compiled_exe.exists());
+        eprintln!("📋 Source file is absolute: {}", compiled_exe.is_absolute());
+        eprintln!("📋 Destination path is absolute: {}", output_path.is_absolute());
+        
         // Copy to output location
-        fs::copy(&compiled_exe, output_path)
+        let bytes_copied = fs::copy(&compiled_exe, output_path)
             .map_err(|e| {
                 eprintln!("❌ Failed to copy compiled stub: {}", e);
-                format!("Failed to copy compiled stub: {}", e)
+                eprintln!("❌ Source: {}", compiled_exe.display());
+                eprintln!("❌ Destination: {}", output_path.display());
+                eprintln!("❌ Source exists: {}", compiled_exe.exists());
+                eprintln!("❌ Source is file: {}", compiled_exe.is_file());
+                if let Some(parent) = output_path.parent() {
+                    eprintln!("❌ Destination parent exists: {}", parent.exists());
+                    eprintln!("❌ Destination parent is dir: {}", parent.is_dir());
+                }
+                format!("Failed to copy compiled stub from {} to {}: {}", 
+                    compiled_exe.display(), output_path.display(), e)
             })?;
+
+        eprintln!("✅ Successfully copied {} bytes", bytes_copied);
+        
+        // Verify the copy was successful
+        if output_path.exists() {
+            let copied_metadata = fs::metadata(output_path)
+                .map_err(|e| {
+                    eprintln!("⚠️ Warning: Failed to verify copied file: {}", e);
+                    e
+                });
+            if let Ok(meta) = copied_metadata {
+                eprintln!("✅ Copied file verified: {} bytes", meta.len());
+                if meta.len() == bytes_copied {
+                    eprintln!("✅ File sizes match");
+                } else {
+                    eprintln!("⚠️ Warning: File sizes don't match (expected: {}, actual: {})", 
+                        bytes_copied, meta.len());
+                }
+            }
+        } else {
+            eprintln!("❌ ERROR: Copied file does not exist after copy operation!");
+            return Err("Copied file verification failed".to_string());
+        }
 
         eprintln!("✅ Stub compilation and copy completed successfully");
         Ok(output_path.clone())
